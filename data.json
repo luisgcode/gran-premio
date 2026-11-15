@@ -7,7 +7,11 @@
       "color": "#e8412f",
       "photo": "img/luis.png",
       "hatTop": 0.04,
-      "hatCx": 0.51
+      "hatCx": 0.51,
+      "eyeY": 0.48,
+      "lines": [
+        "No gano en nada"
+      ]
     },
     {
       "id": "doriana",
@@ -15,7 +19,11 @@
       "color": "#2f7de8",
       "photo": "img/doriana.png",
       "hatTop": 0.01,
-      "hatCx": 0.417
+      "hatCx": 0.417,
+      "eyeY": 0.575,
+      "lines": [
+        "Me tienes que matar"
+      ]
     },
     {
       "id": "john",
@@ -23,7 +31,11 @@
       "color": "#22a55b",
       "photo": "img/john.png",
       "hatTop": 0.105,
-      "hatCx": 0.445
+      "hatCx": 0.445,
+      "eyeY": 0.52,
+      "lines": [
+        "¿Un trencito?"
+      ]
     },
     {
       "id": "angeles",
@@ -31,7 +43,11 @@
       "color": "#f2b81f",
       "photo": "img/angeles.png",
       "hatTop": 0.05,
-      "hatCx": 0.522
+      "hatCx": 0.522,
+      "eyeY": 0.55,
+      "lines": [
+        "Déjame pensar"
+      ]
     }
   ],
   "games": [
