@@ -391,7 +391,7 @@ function renderGames(){
   }).join("");
 }
 
-function fmtWhen(iso){try{const d=new Date(iso);return d.toLocaleDateString("es",{day:"numeric",month:"short"})+" · "+d.toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});}catch(e){return ""}}
+function fmtWhen(iso){try{const d=new Date(iso);return d.toLocaleDateString("es",{day:"numeric",month:"short",timeZone:"America/Toronto"});}catch(e){return ""}}
 function renderHistory(){
   const list=S.wins.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||"")).slice(0,12);
   if(!list.length){$("history").innerHTML=`<li class="muted">Aquí aparece cada victoria que anoten.</li>`;return;}
