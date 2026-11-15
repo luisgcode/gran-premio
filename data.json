@@ -83,6 +83,31 @@
   "wins": [
     {
       "player": "angeles",
+      "game": "ticket",
+      "at": "2026-11-08T19:00:00-05:00"
+    },
+    {
+      "player": "luis",
+      "game": "rummy",
+      "at": "2026-11-08T19:40:00-05:00"
+    },
+    {
+      "player": "doriana",
+      "game": "rummy",
+      "at": "2026-11-08T20:10:00-05:00"
+    },
+    {
+      "player": "john",
+      "game": "life",
+      "at": "2026-11-08T20:50:00-05:00"
+    },
+    {
+      "player": "john",
+      "game": "ticket",
+      "at": "2026-11-08T21:40:00-05:00"
+    },
+    {
+      "player": "angeles",
       "game": "catan",
       "at": "2026-11-14T20:00:00-05:00"
     }
