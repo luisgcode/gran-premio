@@ -1,10 +1,11 @@
 {
+  "season": "navidad",
   "players": [
     {
       "id": "luis",
       "name": "Luis",
       "color": "#e8412f",
-      "photo": "img/luis.jpg"
+      "photo": "img/luis.png"
     },
     {
       "id": "doriana",
