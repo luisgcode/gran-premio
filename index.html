@@ -332,7 +332,7 @@ setInterval(()=>{
   const hd=heads[Math.floor(Math.random()*heads.length)], t=TRICKS[Math.floor(Math.random()*TRICKS.length)];
   hd.classList.remove(...TRICKS); void hd.getBBox(); hd.classList.add(t); setTimeout(()=>hd.classList.remove(t),1700);
 },1800);
-const LINES={joy:["¡Chamo, qué nivel!","¡Pa' que aprendan!","¡Epa, voy volao!","¡Qué fino!","¡Chévere, chévere!","¡Nadie me alcanza, mi pana!"],sad:["Ay, vale…","¡Qué ladilla!","Chamo, qué vaina","Estoy pelando bola","No joda…","Me tienen loco"],fight:["¡Quítate, pana!","¡Échale bolas!","¡Mosca conmigo!","¡Ni de vaina!","¡Vas a ver, chamo!","¡Dale, pues!"]};
+const LINES={};
 setInterval(()=>{
   if(document.hidden||matchMedia("(prefers-reduced-motion: reduce)").matches)return;
   const lanes=[...document.querySelectorAll('.lane')].filter(l=>{const p=pById(l.dataset.p);return (l.dataset.mood&&LINES[l.dataset.mood])||(p&&p.lines&&p.lines.length);});
