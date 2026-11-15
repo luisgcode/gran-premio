@@ -5,26 +5,34 @@
       "id": "luis",
       "name": "Luis",
       "color": "#e8412f",
-      "photo": "img/luis.png"
+      "photo": "img/luis.png",
+      "hatTop": 0.04,
+      "hatCx": 0.51
     },
     {
       "id": "doriana",
       "name": "Doriana",
       "color": "#2f7de8",
       "photo": "img/doriana.png",
-      "headScale": 1.35
+      "headScale": 1.35,
+      "hatTop": 0.365,
+      "hatCx": 0.393
     },
     {
       "id": "john",
       "name": "John",
       "color": "#22a55b",
-      "photo": "img/john.png"
+      "photo": "img/john.png",
+      "hatTop": 0.105,
+      "hatCx": 0.445
     },
     {
       "id": "angeles",
       "name": "Ángeles",
       "color": "#f2b81f",
-      "photo": "img/angeles.png"
+      "photo": "img/angeles.png",
+      "hatTop": 0.05,
+      "hatCx": 0.522
     }
   ],
   "games": [
