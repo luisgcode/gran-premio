@@ -22,7 +22,8 @@
     {
       "id": "angeles",
       "name": "Ángeles",
-      "color": "#f2b81f"
+      "color": "#f2b81f",
+      "photo": "img/angeles.png"
     }
   ],
   "games": [
