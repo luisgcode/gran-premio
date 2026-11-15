@@ -86,5 +86,11 @@
       "game": "catan",
       "at": "2026-11-14T20:00:00-05:00"
     }
+  ],
+  "sharedLines": [
+    "¡Pero juega pues!",
+    "Pero cómo tanto",
+    "Déjame pensar",
+    "Relajado"
   ]
 }

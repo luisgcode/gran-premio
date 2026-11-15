@@ -333,13 +333,14 @@ setInterval(()=>{
   hd.classList.remove(...TRICKS); void hd.getBBox(); hd.classList.add(t); setTimeout(()=>hd.classList.remove(t),1700);
 },1800);
 const LINES={};
+let SHARED=[];
 setInterval(()=>{
   if(document.hidden||matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-  const lanes=[...document.querySelectorAll('.lane')].filter(l=>{const p=pById(l.dataset.p);return (l.dataset.mood&&LINES[l.dataset.mood])||(p&&p.lines&&p.lines.length);});
+  const lanes=[...document.querySelectorAll('.lane')].filter(l=>{const p=pById(l.dataset.p);return SHARED.length||(p&&p.lines&&p.lines.length);});
   if(!lanes.length)return;
   const l=lanes[Math.floor(Math.random()*lanes.length)], s=l.querySelector(".say"), p=pById(l.dataset.p);
-  const mine=(p&&p.lines)||[], mood=LINES[l.dataset.mood]||[];
-  const pool=mine.length&&(Math.random()<.5||!mood.length)?mine:mood;
+  const mine=(p&&p.lines)||[];
+  const pool=mine.length&&(Math.random()<.5||!SHARED.length)?mine:SHARED;
   if(!s||!pool.length)return; s.textContent=pool[Math.floor(Math.random()*pool.length)]; s.classList.add("on"); setTimeout(()=>s.classList.remove("on"),2400);
 },2600);
 function startRace(){
@@ -427,7 +428,7 @@ async function load(){
     const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok)throw 0; const d=await r.json();
     S.players=d.players||[]; S.games=d.games&&d.games.length?d.games:DEFAULT_GAMES;
     S.wins=(d.wins||[]).map((w,i)=>({id:String(i),...w}));
-    applySeason(d.season||'');
+    applySeason(d.season||''); SHARED=Array.isArray(d.sharedLines)?d.sharedLines:[];
     renderAll();
     if(lastCount!==null&&S.wins.length>lastCount){const nw=S.wins.slice(lastCount).sort((a,b)=>(b.at||'').localeCompare(a.at||''));setTimeout(()=>announce(nw[0]),300);}
     else if(lastCount===null){lastLine();setTimeout(startRace,250);}
