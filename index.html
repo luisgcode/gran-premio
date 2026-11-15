@@ -112,7 +112,8 @@ header.top{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-bet
 @keyframes hpop{40%{transform:translateY(-14px) scale(1.18)}}
 /* Face expressions */
 .kart .ex{display:none}
-.lane[data-mood="joy"] .kart .ex-joy,.lane[data-mood="sad"] .kart .ex-sad,.lane[data-mood="fight"] .kart .ex-fight{display:inline}
+.lane.emote[data-mood="joy"] .kart .ex-joy,.lane.emote[data-mood="sad"] .kart .ex-sad,.lane.emote[data-mood="fight"] .kart .ex-fight{display:inline;animation:exin .25s ease-out}
+@keyframes exin{from{opacity:0}to{opacity:1}}
 .kart .tear{transform-box:fill-box;animation:tear 1.4s ease-in infinite}
 .kart .tear.t2{animation-delay:.7s}
 @keyframes tear{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(14px);opacity:0}}
@@ -325,6 +326,11 @@ function moodFX(m){
   if(m==="fight")return `<span class="pow" style="left:20%;top:8%">💥</span><span class="pow" style="left:68%;top:62%;animation-delay:.45s">💥</span><span class="grr">💢</span>`;
   return "";
 }
+setInterval(()=>{
+  if(document.hidden)return;
+  const lanes=[...document.querySelectorAll(".lane")].filter(l=>l.dataset.mood&&!l.classList.contains("emote")); if(!lanes.length)return;
+  const l=lanes[Math.floor(Math.random()*lanes.length)]; l.classList.add("emote"); setTimeout(()=>l.classList.remove("emote"),2600+Math.random()*1200);
+},2200);
 const TRICKS=["t-spin","t-nod","t-shake","t-look","t-pop"];
 setInterval(()=>{
   if(document.hidden||matchMedia("(prefers-reduced-motion: reduce)").matches)return;
