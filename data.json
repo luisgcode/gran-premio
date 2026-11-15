@@ -10,12 +10,14 @@
     {
       "id": "doriana",
       "name": "Doriana",
-      "color": "#2f7de8"
+      "color": "#2f7de8",
+      "photo": "img/doriana.png"
     },
     {
       "id": "john",
       "name": "John",
-      "color": "#22a55b"
+      "color": "#22a55b",
+      "photo": "img/john.png"
     },
     {
       "id": "angeles",
