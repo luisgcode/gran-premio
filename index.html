@@ -214,6 +214,22 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
     <canvas id="confetti" aria-hidden="true"></canvas>
   </section>
 
+  <section class="panel" id="admin" aria-labelledby="admin-title" hidden>
+    <h2 id="admin-title">Anotar victoria</h2>
+    <div class="card log-grid">
+      <div class="setup" id="tokenBox" hidden>
+        <div class="note" style="flex-basis:100%">Pega tu token de GitHub una sola vez. Se queda guardado en este teléfono.</div>
+        <input id="tokenIn" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="Token de GitHub">
+        <button class="btn small" id="tokenSave" type="button">Guardar</button>
+      </div>
+      <div class="log-row"><span class="eyebrow">¿Quién ganó?</span><div class="chips" id="pickPlayers"></div></div>
+      <div class="log-row"><span class="eyebrow">¿En qué juego?</span><div class="chips" id="pickGames"></div></div>
+      <button class="btn" id="addWin" type="button" disabled>Sumar 1 victoria</button>
+      <div class="note" id="adminMsg" aria-live="polite"></div>
+      <button class="btn ghost small" id="tokenForget" type="button" style="justify-self:start" hidden>Olvidar token</button>
+    </div>
+  </section>
+
   <section class="panel" aria-labelledby="gen-title">
     <h2 id="gen-title">Tabla general</h2>
     <div class="card scroll"><table id="general"></table></div>
@@ -396,10 +412,86 @@ function renderHistory(){
   const list=S.wins.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||"")).slice(0,12);
   if(!list.length){$("history").innerHTML=`<li class="muted">Aquí aparece cada victoria que anoten.</li>`;return;}
   $("history").innerHTML=list.map(w=>{const p=pById(w.player),g=gById(w.game);
-    const del="";
+    const k=winKey(w), del=!ADMIN?"":(S.confirmDel===k
+      ?`<span class="confirm">¿Quitar? <button class="btn small" type="button" data-del="${esc(k)}">Sí</button><button class="btn ghost small" type="button" data-cancel>No</button></span>`
+      :`<button class="btn ghost small" type="button" data-ask="${esc(k)}">Quitar</button>`);
     return `<li><span><span class="who"><span class="chip dot" style="background:${p?.color||"#999"};padding:0;border:0"></span>${esc(p?.name||"Jugador borrado")}</span> ganó <b>${esc(g?.name||w.game)}</b> <span class="note">${fmtWhen(w.at)}</span></span>${del}</li>`}).join("");
 }
-function renderAll(){renderRace();renderGeneral();renderGames();renderHistory();}
+function renderAll(){renderRace();renderGeneral();renderGames();renderHistory();renderAdmin();}
+
+/* ---------- Admin (?admin): writes data.json in the repo through the GitHub API ---------- */
+const REPO="luisgcode/gran-premio", API="https://api.github.com/repos/"+REPO+"/contents/data.json";
+const ADMIN=new URLSearchParams(location.search).has("admin");
+const TK="gp_token";
+const getToken=()=>{try{return localStorage.getItem(TK)||"";}catch(e){return "";}};
+const setToken=v=>{try{v?localStorage.setItem(TK,v):localStorage.removeItem(TK);}catch(e){}};
+const winKey=w=>w.player+"|"+w.game+"|"+w.at;
+let busy=false, holdUntil=0;
+function nowLocalISO(){
+  const d=new Date(),o=-d.getTimezoneOffset(),p=n=>String(Math.floor(Math.abs(n))).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())+(o>=0?"+":"-")+p(o/60)+":"+p(o%60);
+}
+function b64dec(s){const b=Uint8Array.from(atob(s.replace(/\s/g,"")),c=>c.charCodeAt(0));return new TextDecoder().decode(b);}
+function b64enc(s){const b=new TextEncoder().encode(s);let bin="";for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(bin);}
+async function commitData(mutate,message){
+  const tok=getToken(); if(!tok)throw new Error("Falta el token");
+  const h={Authorization:"Bearer "+tok,Accept:"application/vnd.github+json"};
+  for(let attempt=0;attempt<3;attempt++){
+    const r=await fetch(API+"?ref=main&t="+Date.now(),{headers:h,cache:"no-store"});
+    if(r.status===401||r.status===403)throw new Error("El token no sirve o no tiene permiso de escritura");
+    if(!r.ok)throw new Error("No pude leer los datos ("+r.status+")");
+    const f=await r.json(), d=JSON.parse(b64dec(f.content));
+    mutate(d);
+    const put=await fetch(API,{method:"PUT",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({message,branch:"main",sha:f.sha,content:b64enc(JSON.stringify(d,null,2)+"\n")})});
+    if(put.ok)return d;
+    if(put.status===409||put.status===422)continue; // someone else wrote at the same time: retry on fresh data
+    if(put.status===401||put.status===403)throw new Error("El token no tiene permiso de escritura");
+    throw new Error("No pude guardar ("+put.status+")");
+  }
+  throw new Error("Choque con otro cambio, intenta otra vez");
+}
+function renderAdmin(){
+  if(!ADMIN)return;
+  const has=!!getToken();
+  $("tokenBox").hidden=has; $("tokenForget").hidden=!has;
+  $("pickPlayers").innerHTML=S.players.map(p=>`<button class="chip" type="button" data-pp="${esc(p.id)}" aria-pressed="${S.pickP===p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join("");
+  $("pickGames").innerHTML=S.games.map(g=>`<button class="chip" type="button" data-pg="${esc(g.id)}" aria-pressed="${S.pickG===g.id}">${esc(g.name)}</button>`).join("");
+  const p=pById(S.pickP),g=gById(S.pickG);
+  const b=$("addWin"); b.disabled=busy||!has||!p||!g;
+  b.textContent=busy?"Guardando…":(p&&g?`Sumar 1 a ${p.name} en ${g.name}`:"Sumar 1 victoria");
+}
+function adminMsg(t,err){const m=$("adminMsg");m.textContent=t;m.classList.toggle("err",!!err);}
+async function doAdd(){
+  const p=pById(S.pickP),g=gById(S.pickG); if(!p||!g||busy)return;
+  busy=true; renderAdmin(); adminMsg("");
+  const w={player:p.id,game:g.id,at:nowLocalISO()};
+  try{
+    const d=await commitData(d=>{(d.wins=d.wins||[]).push(w);},`Win: ${p.name} in ${g.name}`);
+    S.pickP=null;S.pickG=null; busy=false; holdUntil=Date.now()+20000; applyData(d);
+    adminMsg(`✓ Listo: ${p.name} +1 en ${g.name}. En las otras pantallas sale en segundos.`);
+  }catch(e){busy=false;renderAdmin();adminMsg(e.message,true);}
+}
+async function doDelete(k){
+  if(busy)return; busy=true; S.confirmDel=null; renderAll(); adminMsg("");
+  try{
+    const d=await commitData(d=>{const i=(d.wins||[]).findIndex(w=>winKey(w)===k);if(i<0)throw new Error("Esa victoria ya no está");d.wins.splice(i,1);},"Remove a win");
+    busy=false; holdUntil=Date.now()+20000; applyData(d); adminMsg("Victoria quitada.");
+  }catch(e){busy=false;renderAll();adminMsg(e.message,true);}
+}
+if(ADMIN){
+  $("admin").hidden=false;
+  document.addEventListener("click",e=>{
+    const t=e.target.closest("button"); if(!t)return;
+    if(t.dataset.pp){S.pickP=S.pickP===t.dataset.pp?null:t.dataset.pp;renderAdmin();}
+    else if(t.dataset.pg){S.pickG=S.pickG===t.dataset.pg?null:t.dataset.pg;renderAdmin();}
+    else if(t.id==="addWin")doAdd();
+    else if(t.dataset.ask){S.confirmDel=t.dataset.ask;renderHistory();}
+    else if(t.hasAttribute("data-cancel")){S.confirmDel=null;renderHistory();}
+    else if(t.dataset.del)doDelete(t.dataset.del);
+    else if(t.id==="tokenSave"){const v=$("tokenIn").value.trim();if(v){setToken(v);$("tokenIn").value="";adminMsg("Token guardado.");renderAdmin();}}
+    else if(t.id==="tokenForget"){setToken("");adminMsg("Token borrado de este teléfono.");renderAdmin();}
+  });
+}
 
 function announce(w){
   const p=pById(w.player),g=gById(w.game); if(!p)return;
@@ -428,22 +520,43 @@ function applySeason(s){
   }
 }
 renderAll();
-let lastCount=null;
+let lastKeys=null;
+function applyData(d){
+  S.players=d.players||[]; S.games=d.games&&d.games.length?d.games:DEFAULT_GAMES;
+  S.wins=(d.wins||[]).map((w,i)=>({id:String(i),...w}));
+  applySeason(d.season||''); SHARED=Array.isArray(d.sharedLines)?d.sharedLines:[];
+  renderAll();
+  const keys=new Set(S.wins.map(winKey));
+  if(lastKeys===null){lastLine();setTimeout(startRace,250);}
+  else{const nw=S.wins.filter(w=>!lastKeys.has(winKey(w))).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
+    if(nw.length)setTimeout(()=>announce(nw[0]),300); else if(keys.size<lastKeys.size)lastLine();}
+  lastKeys=keys;
+  $('status').textContent='En vivo · '+S.wins.length+' victorias · se actualiza solo';
+}
+/* Read straight from the repo (fresh within seconds of a commit). Unchanged answers come back as 304,
+   which GitHub does not count against the rate limit. Falls back to the Pages copy of data.json. */
+let etag="", apiPausedUntil=0;
+async function fetchData(){
+  if(Date.now()>apiPausedUntil){
+    try{
+      const h={Accept:'application/vnd.github.raw+json'}; if(etag)h['If-None-Match']=etag;
+      const r=await fetch(API+'?ref=main',{headers:h,cache:'no-store'});
+      if(r.status===304)return null;
+      if(r.ok){etag=r.headers.get('ETag')||'';return JSON.parse(await r.text());}
+      apiPausedUntil=Date.now()+5*60e3;
+    }catch(e){apiPausedUntil=Date.now()+60e3;}
+  }
+  const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok)throw 0; return r.json();
+}
+let loading=false;
 async function load(){
-  try{
-    const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok)throw 0; const d=await r.json();
-    S.players=d.players||[]; S.games=d.games&&d.games.length?d.games:DEFAULT_GAMES;
-    S.wins=(d.wins||[]).map((w,i)=>({id:String(i),...w}));
-    applySeason(d.season||''); SHARED=Array.isArray(d.sharedLines)?d.sharedLines:[];
-    renderAll();
-    if(lastCount!==null&&S.wins.length>lastCount){const nw=S.wins.slice(lastCount).sort((a,b)=>(b.at||'').localeCompare(a.at||''));setTimeout(()=>announce(nw[0]),300);}
-    else if(lastCount===null){lastLine();setTimeout(startRace,250);}
-    lastCount=S.wins.length;
-    $('status').textContent='En vivo · '+S.wins.length+' victorias · se actualiza solo';
-  }catch(e){$('status').textContent='Sin conexión, reintentando…';}
+  if(loading||busy||Date.now()<holdUntil)return; loading=true;
+  try{const d=await fetchData(); if(d)applyData(d); else if(lastKeys)$('status').textContent='En vivo · '+S.wins.length+' victorias · se actualiza solo';}
+  catch(e){$('status').textContent='Sin conexión, reintentando…';}
+  finally{loading=false;}
 }
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(renderRace,150);});
-load(); setInterval(()=>{if(!document.hidden)load();},20000);
+load(); setInterval(()=>{if(!document.hidden)load();},5000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
 </script>
 </body>
