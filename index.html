@@ -182,6 +182,8 @@ td.best{font-weight:700;color:var(--good)}
 .history{list-style:none;margin:0;padding:0;display:grid}
 .history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .history li:last-child{border-bottom:0}
+.stepper{display:flex;align-items:center;gap:14px}.stepper .chip{width:48px;height:48px;justify-content:center;font-size:24px;padding:0}.qty{font-family:var(--f-display);font-size:28px;min-width:2ch;text-align:center}
+#admin .chip{padding:10px 16px;font-size:15px}
 .confirm{display:inline-flex;gap:6px;align-items:center;font-size:13px}
 .setup{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .setup input{font:15px var(--f-body);padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0;flex:1 1 180px}
@@ -224,6 +226,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
       </div>
       <div class="log-row"><span class="eyebrow">¿Quién ganó?</span><div class="chips" id="pickPlayers"></div></div>
       <div class="log-row"><span class="eyebrow">¿En qué juego?</span><div class="chips" id="pickGames"></div></div>
+      <div class="log-row"><span class="eyebrow">¿Cuántas?</span><div class="stepper"><button class="chip" type="button" id="qMinus" aria-label="Una menos">−</button><span class="qty num" id="qty" aria-live="polite">1</span><button class="chip" type="button" id="qPlus" aria-label="Una más">+</button></div></div>
       <button class="btn" id="addWin" type="button" disabled>Sumar 1 victoria</button>
       <div class="note" id="adminMsg" aria-live="polite"></div>
       <button class="btn ghost small" id="tokenForget" type="button" style="justify-self:start" hidden>Olvidar token</button>
@@ -251,7 +254,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
 const COLORS=["#e8412f","#2f7de8","#22a55b","#f2b81f","#8e4ae0","#f07a1a","#1fb8c4","#e04a9a"];
 const DEFAULT_GAMES=[{id:"uno",name:"UNO"},{id:"rummy",name:"Rummy"},{id:"ticket",name:"Ticket to Ride"},{id:"catan",name:"Catan"},{id:"monopoly",name:"Monopoly"},{id:"life",name:"Life"},{id:"golf",name:"Golf (Netflix)"}];
 const LANE_H=64;
-const S={players:[],games:DEFAULT_GAMES,wins:[],pickP:null,pickG:null,canWrite:null,db:null,confirmDel:null,loaded:false,initialDone:false};
+const S={players:[],games:DEFAULT_GAMES,wins:[],pickP:null,pickG:null,qty:1,canWrite:null,db:null,confirmDel:null,loaded:false,initialDone:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -427,8 +430,8 @@ const getToken=()=>{try{return localStorage.getItem(TK)||"";}catch(e){return "";
 const setToken=v=>{try{v?localStorage.setItem(TK,v):localStorage.removeItem(TK);}catch(e){}};
 const winKey=w=>w.player+"|"+w.game+"|"+w.at;
 let busy=false, holdUntil=0;
-function nowLocalISO(){
-  const d=new Date(),o=-d.getTimezoneOffset(),p=n=>String(Math.floor(Math.abs(n))).padStart(2,"0");
+function nowLocalISO(d=new Date()){
+  const o=-d.getTimezoneOffset(),p=n=>String(Math.floor(Math.abs(n))).padStart(2,"0");
   return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())+(o>=0?"+":"-")+p(o/60)+":"+p(o%60);
 }
 function b64dec(s){const b=Uint8Array.from(atob(s.replace(/\s/g,"")),c=>c.charCodeAt(0));return new TextDecoder().decode(b);}
@@ -458,17 +461,19 @@ function renderAdmin(){
   $("pickGames").innerHTML=S.games.map(g=>`<button class="chip" type="button" data-pg="${esc(g.id)}" aria-pressed="${S.pickG===g.id}">${esc(g.name)}</button>`).join("");
   const p=pById(S.pickP),g=gById(S.pickG);
   const b=$("addWin"); b.disabled=busy||!has||!p||!g;
-  b.textContent=busy?"Guardando…":(p&&g?`Sumar 1 a ${p.name} en ${g.name}`:"Sumar 1 victoria");
+  $("qty").textContent=S.qty; const n=S.qty, vs=n===1?"victoria":"victorias";
+  b.textContent=busy?"Guardando…":(p&&g?`Sumar ${n} a ${p.name} en ${g.name}`:`Sumar ${n} ${vs}`);
 }
 function adminMsg(t,err){const m=$("adminMsg");m.textContent=t;m.classList.toggle("err",!!err);}
 async function doAdd(){
   const p=pById(S.pickP),g=gById(S.pickG); if(!p||!g||busy)return;
   busy=true; renderAdmin(); adminMsg("");
-  const w={player:p.id,game:g.id,at:nowLocalISO()};
+  const n=S.qty, base=Date.now();
   try{
-    const d=await commitData(d=>{(d.wins=d.wins||[]).push(w);},`Win: ${p.name} in ${g.name}`);
-    S.pickP=null;S.pickG=null; busy=false; holdUntil=Date.now()+20000; applyData(d);
-    adminMsg(`✓ Listo: ${p.name} +1 en ${g.name}. En las otras pantallas sale en segundos.`);
+    const d=await commitData(d=>{d.wins=d.wins||[];for(let i=0;i<n;i++)d.wins.push({player:p.id,game:g.id,at:nowLocalISO(new Date(base+i*1000))});},`Win${n>1?"s":""}: ${p.name} +${n} in ${g.name}`);
+    S.pickP=null;S.pickG=null;S.qty=1; busy=false; holdUntil=Date.now()+20000; applyData(d);
+    document.querySelector(".race").scrollIntoView({behavior:"smooth",block:"start"});
+    adminMsg(`✓ Listo: ${p.name} +${n} en ${g.name}. En las otras pantallas sale en segundos.`);
   }catch(e){busy=false;renderAdmin();adminMsg(e.message,true);}
 }
 async function doDelete(k){
@@ -479,12 +484,14 @@ async function doDelete(k){
   }catch(e){busy=false;renderAll();adminMsg(e.message,true);}
 }
 if(ADMIN){
-  $("admin").hidden=false;
+  $("admin").hidden=false; document.querySelector(".race").before($("admin"));
   document.addEventListener("click",e=>{
     const t=e.target.closest("button"); if(!t)return;
     if(t.dataset.pp){S.pickP=S.pickP===t.dataset.pp?null:t.dataset.pp;renderAdmin();}
     else if(t.dataset.pg){S.pickG=S.pickG===t.dataset.pg?null:t.dataset.pg;renderAdmin();}
     else if(t.id==="addWin")doAdd();
+    else if(t.id==="qMinus"){S.qty=Math.max(1,S.qty-1);renderAdmin();}
+    else if(t.id==="qPlus"){S.qty=Math.min(10,S.qty+1);renderAdmin();}
     else if(t.dataset.ask){S.confirmDel=t.dataset.ask;renderHistory();}
     else if(t.hasAttribute("data-cancel")){S.confirmDel=null;renderHistory();}
     else if(t.dataset.del)doDelete(t.dataset.del);
@@ -493,11 +500,11 @@ if(ADMIN){
   });
 }
 
-function announce(w){
+function announce(w,n=1){
   const p=pById(w.player),g=gById(w.game); if(!p)return;
   const {tot,per}=counts();
   const t=$("ticker");
-  t.innerHTML=`🏁 <span><b>${esc(p.name)}</b> sumó una victoria en <b>${esc(g?.name||w.game)}</b>: ya lleva ${per[p.id]?.[w.game]||0} en ese juego y ${tot[p.id]} en total.</span>`;
+  t.innerHTML=`🏁 <span><b>${esc(p.name)}</b> sumó ${n===1?"una victoria":n+" victorias"} en <b>${esc(g?.name||w.game)}</b>: ya lleva ${per[p.id]?.[w.game]||0} en ese juego y ${tot[p.id]} en total.</span>`;
   t.classList.remove("flash");void t.offsetWidth;t.classList.add("flash");
   const k=document.querySelector(`.lane[data-p="${w.player}"] .kart`);
   if(k){k.classList.remove("boost");void k.offsetWidth;k.classList.add("boost");setTimeout(()=>k.classList.remove("boost"),2200);setTimeout(()=>{const rr=document.querySelector(".race").getBoundingClientRect(),kr=k.getBoundingClientRect();confetti(kr.left-rr.left+kr.width/2,kr.top-rr.top);},900);}
@@ -529,7 +536,7 @@ function applyData(d){
   const keys=new Set(S.wins.map(winKey));
   if(lastKeys===null){lastLine();setTimeout(startRace,250);}
   else{const nw=S.wins.filter(w=>!lastKeys.has(winKey(w))).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
-    if(nw.length)setTimeout(()=>announce(nw[0]),300); else if(keys.size<lastKeys.size)lastLine();}
+    if(nw.length)setTimeout(()=>announce(nw[0],nw.filter(w=>w.player===nw[0].player&&w.game===nw[0].game).length),300); else if(keys.size<lastKeys.size)lastLine();}
   lastKeys=keys;
   $('status').textContent='En vivo · '+S.wins.length+' victorias · se actualiza solo';
 }
