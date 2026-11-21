@@ -231,7 +231,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
         <input id="tokenIn" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="Token de GitHub">
         <button class="btn small" id="tokenSave" type="button">Guardar</button>
       </div>
-      <div class="log-row"><span class="eyebrow">¿Quién ganó?</span><div class="chips" id="pickPlayers"></div></div>
+      <div class="log-row"><span class="eyebrow">¿Quién ganó? <span style="text-transform:none;letter-spacing:0;font-weight:500">(puedes marcar varios)</span></span><div class="chips" id="pickPlayers"></div></div>
       <div class="log-row"><span class="eyebrow">¿En qué juego?</span><div class="chips" id="pickGames"></div></div>
       <div class="log-row"><span class="eyebrow">¿Cuántas?</span><div class="stepper"><button class="chip" type="button" id="qMinus" aria-label="Una menos">−</button><span class="qty num" id="qty" aria-live="polite">1</span><button class="chip" type="button" id="qPlus" aria-label="Una más">+</button></div></div>
       <button class="btn" id="addWin" type="button" disabled>Sumar 1 victoria</button>
@@ -261,7 +261,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
 const COLORS=["#e8412f","#2f7de8","#22a55b","#f2b81f","#8e4ae0","#f07a1a","#1fb8c4","#e04a9a"];
 const DEFAULT_GAMES=[{id:"uno",name:"UNO"},{id:"rummy",name:"Rummy"},{id:"ticket",name:"Ticket to Ride"},{id:"catan",name:"Catan"},{id:"monopoly",name:"Monopoly"},{id:"life",name:"Life"},{id:"golf",name:"Golf (Netflix)"}];
 const LANE_H=64;
-const S={players:[],games:DEFAULT_GAMES,wins:[],pickP:null,pickG:null,qty:1,canWrite:null,db:null,confirmDel:null,loaded:false,initialDone:false};
+const S={players:[],games:DEFAULT_GAMES,wins:[],pickP:[],pickG:null,qty:1,canWrite:null,db:null,confirmDel:null,loaded:false,initialDone:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -479,23 +479,24 @@ function renderAdmin(){
   if(!ADMIN)return;
   const has=!!getToken();
   $("tokenBox").hidden=has; $("tokenForget").hidden=!has;
-  $("pickPlayers").innerHTML=S.players.map(p=>`<button class="chip" type="button" data-pp="${esc(p.id)}" aria-pressed="${S.pickP===p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join("");
+  $("pickPlayers").innerHTML=S.players.map(p=>`<button class="chip" type="button" data-pp="${esc(p.id)}" aria-pressed="${S.pickP.includes(p.id)}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join("");
   $("pickGames").innerHTML=S.games.map(g=>`<button class="chip" type="button" data-pg="${esc(g.id)}" aria-pressed="${S.pickG===g.id}">${esc(g.name)}</button>`).join("");
-  const p=pById(S.pickP),g=gById(S.pickG);
-  const b=$("addWin"); b.disabled=busy||!has||!p||!g;
+  const ps=S.pickP.map(pById).filter(Boolean),g=gById(S.pickG);
+  const b=$("addWin"); b.disabled=busy||!has||!ps.length||!g;
   $("qty").textContent=S.qty; const n=S.qty, vs=n===1?"victoria":"victorias";
-  b.textContent=busy?"Guardando…":(p&&g?`Sumar ${n} a ${p.name} en ${g.name}`:`Sumar ${n} ${vs}`);
+  b.textContent=busy?"Guardando…":(ps.length&&g?`Sumar ${n} a ${joinNames(ps.map(p=>p.name))} en ${g.name}`:`Sumar ${n} ${vs}`);
 }
 function adminMsg(t,err){const m=$("adminMsg");m.textContent=t;m.classList.toggle("err",!!err);}
 async function doAdd(){
-  const p=pById(S.pickP),g=gById(S.pickG); if(!p||!g||busy)return;
+  const ps=S.pickP.map(pById).filter(Boolean),g=gById(S.pickG); if(!ps.length||!g||busy)return;
+  const names=joinNames(ps.map(p=>p.name));
   busy=true; renderAdmin(); adminMsg("");
   const n=S.qty, base=Date.now();
   try{
-    const d=await commitData(d=>{d.wins=d.wins||[];for(let i=0;i<n;i++)d.wins.push({player:p.id,game:g.id,at:nowLocalISO(new Date(base+i*1000))});},`Win${n>1?"s":""}: ${p.name} +${n} in ${g.name}`);
-    S.pickP=null;S.pickG=null;S.qty=1; busy=false; holdUntil=Date.now()+20000; applyData(d);
+    const d=await commitData(d=>{d.wins=d.wins||[];for(let i=0;i<n;i++)for(const p of ps)d.wins.push({player:p.id,game:g.id,at:nowLocalISO(new Date(base+i*1000))});},`Win${n>1||ps.length>1?"s":""}: ${ps.map(p=>p.name).join(", ")} +${n} in ${g.name}`);
+    S.pickP=[];S.pickG=null;S.qty=1; busy=false; holdUntil=Date.now()+20000; applyData(d);
     document.querySelector(".race").scrollIntoView({behavior:"smooth",block:"start"});
-    adminMsg(`✓ Listo: ${p.name} +${n} en ${g.name}. En las otras pantallas sale en segundos.`);
+    adminMsg(`✓ Listo: ${names} +${n} en ${g.name}. En las otras pantallas sale en segundos.`);
   }catch(e){busy=false;renderAdmin();adminMsg(e.message,true);}
 }
 async function doDelete(k){
@@ -509,7 +510,7 @@ if(ADMIN){
   $("admin").hidden=false; document.querySelector(".race").before($("admin"));
   document.addEventListener("click",e=>{
     const t=e.target.closest("button"); if(!t)return;
-    if(t.dataset.pp){S.pickP=S.pickP===t.dataset.pp?null:t.dataset.pp;renderAdmin();}
+    if(t.dataset.pp){const id=t.dataset.pp;S.pickP=S.pickP.includes(id)?S.pickP.filter(x=>x!==id):[...S.pickP,id];renderAdmin();}
     else if(t.dataset.pg){S.pickG=S.pickG===t.dataset.pg?null:t.dataset.pg;renderAdmin();}
     else if(t.id==="addWin")doAdd();
     else if(t.id==="qMinus"){S.qty=Math.max(1,S.qty-1);renderAdmin();}
@@ -522,20 +523,25 @@ if(ADMIN){
   });
 }
 
-function announce(w,n=1){
-  const p=pById(w.player),g=gById(w.game); if(!p)return;
-  const {tot,per}=counts();
-  const t=$("ticker");
-  t.innerHTML=`🏁 <span><b>${esc(p.name)}</b> sumó ${n===1?"una victoria":n+" victorias"} en <b>${esc(g?.name||w.game)}</b>: ya lleva ${per[p.id]?.[w.game]||0} en ese juego y ${tot[p.id]} en total.</span>`;
+const joinNames=a=>a.length<2?(a[0]||""):a.slice(0,-1).join(", ")+" y "+a[a.length-1];
+/* ws: the new wins of one game (one or several players, one or several each) */
+function announce(ws){
+  const g=gById(ws[0].game), gn=esc(g?.name||ws[0].game), {tot,per}=counts();
+  const ids=[...new Set(ws.map(w=>w.player))].filter(pById), t=$("ticker"); if(!ids.length)return;
+  if(ids.length===1){const p=pById(ids[0]),n=ws.length;
+    t.innerHTML=`🏁 <span><b>${esc(p.name)}</b> sumó ${n===1?"una victoria":n+" victorias"} en <b>${gn}</b>: ya lleva ${per[p.id]?.[ws[0].game]||0} en ese juego y ${tot[p.id]} en total.</span>`;}
+  else t.innerHTML=`🏁 <span><b>${esc(joinNames(ids.map(id=>pById(id).name)))}</b> ganaron en <b>${gn}</b>.</span>`;
   t.classList.remove("flash");void t.offsetWidth;t.classList.add("flash");
-  const k=document.querySelector(`.lane[data-p="${w.player}"] .kart`);
-  if(k){k.classList.remove("boost");void k.offsetWidth;k.classList.add("boost");setTimeout(()=>k.classList.remove("boost"),2200);setTimeout(()=>{const rr=document.querySelector(".race").getBoundingClientRect(),kr=k.getBoundingClientRect();confetti(kr.left-rr.left+kr.width/2,kr.top-rr.top);},900);}
+  ids.forEach((id,i)=>{const k=document.querySelector(`.lane[data-p="${id}"] .kart`); if(!k)return;
+    k.classList.remove("boost");void k.offsetWidth;k.classList.add("boost");setTimeout(()=>k.classList.remove("boost"),2200);
+    setTimeout(()=>{const rr=document.querySelector(".race").getBoundingClientRect(),kr=k.getBoundingClientRect();confetti(kr.left-rr.left+kr.width/2,kr.top-rr.top);},900+i*250);});
 }
 function lastLine(){
-  const w=S.wins.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||""))[0];
+  const all=S.wins.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||"")), w=all[0];
   if(!w){$("ticker").textContent="Todavía no hay victorias. Anoten la primera abajo.";return;}
-  const p=pById(w.player),g=gById(w.game); if(!p)return;
-  $("ticker").innerHTML=`<span>Última: <b>${esc(p.name)}</b> ganó en <b>${esc(g?.name||w.game)}</b> · ${fmtWhen(w.at)}</span>`;
+  const day=fmtWhen(w.at), grp=[]; for(const x of all){if(x.game!==w.game||fmtWhen(x.at)!==day)break;grp.push(x);}
+  const ids=[...new Set(grp.slice().reverse().map(x=>x.player))].filter(pById); if(!ids.length)return; const g=gById(w.game);
+  $("ticker").innerHTML=`<span>Última: <b>${esc(joinNames(ids.map(id=>pById(id).name)))}</b> ${ids.length>1?"ganaron":"ganó"} en <b>${esc(g?.name||w.game)}</b> · ${day}</span>`;
 }
 
 let seasonNow=null;
@@ -558,7 +564,7 @@ function applyData(d){
   const keys=new Set(S.wins.map(winKey));
   if(lastKeys===null){lastLine();setTimeout(startRace,250);}
   else{const nw=S.wins.filter(w=>!lastKeys.has(winKey(w))).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
-    if(nw.length)setTimeout(()=>announce(nw[0],nw.filter(w=>w.player===nw[0].player&&w.game===nw[0].game).length),300); else if(keys.size<lastKeys.size)lastLine();}
+    if(nw.length)setTimeout(()=>announce(nw.filter(w=>w.game===nw[0].game)),300); else if(keys.size<lastKeys.size)lastLine();}
   lastKeys=keys;
   $('status').textContent='En vivo · '+S.wins.length+' victorias · se actualiza solo';
 }
