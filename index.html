@@ -228,7 +228,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
     <div class="card log-grid">
       <div class="setup" id="tokenBox" hidden>
         <div class="note" style="flex-basis:100%">Pega tu token de GitHub una sola vez. Se queda guardado en este teléfono.</div>
-        <input id="tokenIn" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="Token de GitHub">
+        <input id="tokenIn" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="github_pat_…" aria-label="Token de GitHub">
         <button class="btn small" id="tokenSave" type="button">Guardar</button>
       </div>
       <div class="log-row"><span class="eyebrow">¿Quién ganó? <span style="text-transform:none;letter-spacing:0;font-weight:500">(puedes marcar varios)</span></span><div class="chips" id="pickPlayers"></div></div>
@@ -463,14 +463,15 @@ async function commitData(mutate,message){
   const h={Authorization:"Bearer "+tok,Accept:"application/vnd.github+json"};
   for(let attempt=0;attempt<3;attempt++){
     const r=await fetch(API+"?ref=main&t="+Date.now(),{headers:h,cache:"no-store"});
-    if(r.status===401||r.status===403)throw new Error("El token no sirve o no tiene permiso de escritura");
+    if(r.status===401)throw new Error(BAD_TOKEN);
     if(!r.ok)throw new Error("No pude leer los datos ("+r.status+")");
     const f=await r.json(), d=JSON.parse(b64dec(f.content));
     mutate(d);
     const put=await fetch(API,{method:"PUT",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({message,branch:"main",sha:f.sha,content:b64enc(JSON.stringify(d,null,2)+"\n")})});
     if(put.ok)return d;
     if(put.status===409||put.status===422)continue; // someone else wrote at the same time: retry on fresh data
-    if(put.status===401||put.status===403)throw new Error("El token no tiene permiso de escritura");
+    if(put.status===401)throw new Error(BAD_TOKEN);
+    if(put.status===403||put.status===404)throw new Error(NO_WRITE);
     throw new Error("No pude guardar ("+put.status+")");
   }
   throw new Error("Choque con otro cambio, intenta otra vez");
@@ -485,6 +486,21 @@ function renderAdmin(){
   const b=$("addWin"); b.disabled=busy||!has||!ps.length||!g;
   $("qty").textContent=S.qty; const n=S.qty, vs=n===1?"victoria":"victorias";
   b.textContent=busy?"Guardando…":(ps.length&&g?`Sumar ${n} a ${joinNames(ps.map(p=>p.name))} en ${g.name}`:`Sumar ${n} ${vs}`);
+}
+const BAD_TOKEN="GitHub no reconoce el token: quedó incompleto o venció. Toca «Olvidar token» y pégalo de nuevo completo.";
+const NO_WRITE="El token es válido pero no puede guardar. En GitHub edita el token: Repository access → gran-premio, y Permissions → Contents → «Read and write».";
+async function saveToken(){
+  const v=$("tokenIn").value.replace(/\s+/g,""); if(!v){adminMsg("Pega el token primero.",true);return;}
+  if(!/^(github_pat_|ghp_)/.test(v)){adminMsg("Eso no parece un token de GitHub: debe empezar con github_pat_ (o ghp_).",true);return;}
+  adminMsg("Probando el token…");
+  try{
+    const r=await fetch("https://api.github.com/user",{headers:{Authorization:"Bearer "+v,Accept:"application/vnd.github+json"},cache:"no-store"});
+    if(r.status===401){adminMsg("GitHub no reconoce ese token: quedó incompleto o venció. Cópialo de nuevo completo (o crea uno nuevo) y pégalo.",true);return;}
+    if(!r.ok){adminMsg("GitHub respondió "+r.status+". Intenta otra vez en un minuto.",true);return;}
+    const u=await r.json();
+    setToken(v); $("tokenIn").value=""; renderAdmin();
+    adminMsg(`✓ Token de ${u.login} guardado. Haz una prueba: suma una victoria y quítala.`);
+  }catch(e){adminMsg("Sin conexión con GitHub. Revisa el internet e intenta de nuevo.",true);}
 }
 function adminMsg(t,err){const m=$("adminMsg");m.textContent=t;m.classList.toggle("err",!!err);}
 async function doAdd(){
@@ -518,7 +534,7 @@ if(ADMIN){
     else if(t.dataset.ask){S.confirmDel=t.dataset.ask;renderHistory();}
     else if(t.hasAttribute("data-cancel")){S.confirmDel=null;renderHistory();}
     else if(t.dataset.del)doDelete(t.dataset.del);
-    else if(t.id==="tokenSave"){const v=$("tokenIn").value.trim();if(v){setToken(v);$("tokenIn").value="";adminMsg("Token guardado.");renderAdmin();}}
+    else if(t.id==="tokenSave")saveToken();
     else if(t.id==="tokenForget"){setToken("");adminMsg("Token borrado de este teléfono.");renderAdmin();}
   });
 }
