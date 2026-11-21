@@ -207,6 +207,27 @@ td.best{font-weight:700;color:var(--good)}
 .gfx-train .wagon img{position:absolute;left:50%;bottom:62%;width:calc(var(--u)*.62);transform:translateX(-50%);filter:drop-shadow(0 2px 0 rgba(0,0,0,.4))}
 .gfx-train .loco{width:calc(var(--u)*1.5)}
 .gfx-ball{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#d9d9d9 70%,#aaa);box-shadow:0 3px 6px rgba(0,0,0,.4)}
+/* Streaks (fire) and droughts (cactus) for tonight */
+.lane[data-streak] .kart .fire{display:block;opacity:.9}
+.lane[data-streak] .kart .wins::after{content:"🔥";margin-left:2px;font-size:12px}
+.kart .cactus{display:none;position:absolute;left:-38px;bottom:-4px;font-size:28px;line-height:1;transform-origin:50% 100%;animation:sway 1.8s ease-in-out infinite alternate}
+.lane[data-drought] .kart .cactus{display:block}
+@keyframes sway{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+/* Track surprises */
+.surprise{position:absolute;z-index:4;pointer-events:none;line-height:1;white-space:nowrap}
+.surprise .deer{display:block;overflow:visible}
+.surprise .deer .legs{animation:gallop .22s ease-in-out infinite alternate;transform-origin:50% 70%;transform-box:fill-box}
+@keyframes gallop{from{transform:skewX(14deg)}to{transform:skewX(-14deg)}}
+.surprise .sleigh{position:relative;display:inline-block}
+.surprise .sleigh svg{display:block}
+.surprise .santa{position:absolute;left:18%;bottom:58%;line-height:1}
+.surprise .hoho{display:inline-block;margin-left:8px;font:700 14px var(--f-body);background:#fff;color:#b3261e;padding:3px 10px;border-radius:999px;vertical-align:middle}
+.kart.hit .art{animation:hit .6s ease}
+@keyframes hit{0%,100%{transform:none}20%{transform:translateX(-6px) rotate(-8deg)}40%{transform:translateX(5px) rotate(6deg)}60%{transform:translateX(-3px) rotate(-3deg)}}
+.kart.hop .art{animation:hop .7s cubic-bezier(.3,1.5,.5,1)}
+@keyframes hop{0%,100%{transform:none}40%{transform:translateY(-22px) rotate(-6deg)}}
+.ticker .nar{animation:tin .45s ease}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .confirm{display:inline-flex;gap:6px;align-items:center;font-size:13px}
 .setup{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .setup input{font:15px var(--f-body);padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0;flex:1 1 180px}
@@ -333,6 +354,73 @@ function gameExperts(){
   }
   return out;
 }
+/* Tonight = the last 12 hours. Wins saved together share a timestamp and count as one game. */
+function nightStats(){
+  const since=Date.now()-12*3600e3, groups={};
+  for(const w of S.wins){const t=Date.parse(w.at); if(!(t>=since))continue; (groups[w.at]=groups[w.at]||{t,ids:new Set()}).ids.add(w.player);}
+  const gs=Object.values(groups).sort((a,b)=>b.t-a.t), streak={}, drought=new Set();
+  for(const p of S.players){let k=0; for(const g of gs){if(g.ids.has(p.id))k++; else break;} streak[p.id]=k;
+    if(gs.length>=3&&!gs.some(g=>g.ids.has(p.id)))drought.add(p.id);}
+  return {games:gs.length,streak,drought};
+}
+/* Narrator: fun one-liners built from the real numbers */
+function narratorLines(){
+  const {tot,per}=counts(), order=ranking(), L=[], b=x=>`<b>${esc(x)}</b>`;
+  if(!order.length||!S.wins.length)return L;
+  const lead=tot[order[0].id], max=Math.max(30,Math.ceil((lead+8)/10)*10);
+  if(order.length>1&&tot[order[1].id]<lead)L.push(`🏆 ${b(order[0].name)} manda la carrera con ${lead} victorias`);
+  for(let i=0;i<order.length-1;i++){const a=order[i],c=order[i+1],d=tot[a.id]-tot[c.id];
+    if(d===0&&tot[a.id]>0)L.push(`⚔️ ${b(a.name)} y ${b(c.name)} empatados con ${tot[a.id]}. ¡Esto se pone bueno!`);
+    else if(d>0&&d<=3)L.push(`👀 A ${b(c.name)} le ${d===1?"falta 1":"faltan "+d} para alcanzar a ${b(a.name)}`);}
+  const ex=gameExperts(); for(const id in ex)for(const g of ex[id])L.push(`${gameIcon(g)} ${b(pById(id).name)} manda en ${b(g.name)} con ${per[id][g.id]}`);
+  const played=S.games.map(g=>({g,n:S.players.reduce((s,p)=>s+(per[p.id]?.[g.id]||0),0)}));
+  for(const x of played){if(!x.n)L.push(`${gameIcon(x.g)} Nadie ha ganado ${b(x.g.name)} todavía. ¿Quién se atreve?`);
+    else if(x.n>=3)for(const p of S.players)if(!per[p.id][x.g.id])L.push(`🤨 ${b(p.name)} lleva 0 en ${b(x.g.name)}… sospechoso`);}
+  const top=played.slice().sort((a,c)=>c.n-a.n)[0]; if(top&&top.n>1)L.push(`📊 El más jugado es ${b(top.g.name)}: ${top.n} victorias repartidas`);
+  const last=order[order.length-1]; if(order.length>1&&tot[last.id]<tot[order[order.length-2].id])L.push(`🐢 ${b(last.name)} va de último… ¡pero juega pues!`);
+  L.push(`🏁 A ${b(order[0].name)} le faltan ${max-lead} para la meta`);
+  L.push(`🧮 Van ${S.wins.length} victorias en total`);
+  const n=nightStats();
+  if(n.games)L.push(`🎲 Esta noche van ${n.games} ${n.games===1?"partida":"partidas"}`);
+  for(const id in n.streak)if(n.streak[id]>=2)L.push(`🔥 ${b(pById(id).name)} está en racha: ${n.streak[id]} seguidas`,`🔥 ¡Alguien pare a ${b(pById(id).name)}!`);
+  for(const id of n.drought)L.push(`🌵 ${b(pById(id).name)} no ha ganado nada esta noche… ánimo`);
+  return L;
+}
+let narShown=0, lastNar="", quietUntil=0;
+setInterval(()=>{
+  if(document.hidden||Date.now()<quietUntil||!lastKeys)return;
+  narShown++;
+  if(narShown%3===0){lastLine();return;}
+  const L=narratorLines().filter(x=>x!==lastNar); if(!L.length)return;
+  lastNar=L[Math.floor(Math.random()*L.length)];
+  $("ticker").innerHTML=`<span class="nar">${lastNar}</span>`;
+},12000);
+/* Christmas surprises on the track every couple of minutes */
+function raceBox(){const r=document.querySelector(".race");return {r,rr:r.getBoundingClientRect()};}
+function sgfx(html,css){const e=document.createElement("div");e.className="surprise";e.innerHTML=html;Object.assign(e.style,css||{});document.querySelector(".race").appendChild(e);return e;}
+function randKart(){const ks=[...document.querySelectorAll(".lane .kart")];return ks.length?ks[Math.floor(Math.random()*ks.length)]:null;}
+function kartPos(k){const {rr}=raceBox(),kr=k.getBoundingClientRect();return {x:kr.left-rr.left+kr.width/2,y:kr.top-rr.top,w:kr.width};}
+function kartSay(k,txt,ms=2200){const s=k.querySelector(".say");if(!s)return;s.textContent=txt;s.classList.add("on");setTimeout(()=>s.classList.remove("on"),ms);}
+function kartFx(k,cls,ms=800){k.classList.remove(cls);void k.offsetWidth;k.classList.add(cls);setTimeout(()=>k.classList.remove(cls),ms);}
+function sparkle(x,y,chars,n=10){for(let i=0;i<n;i++){const e=sgfx(pick(chars),{left:x+"px",top:y+"px",fontSize:(14+Math.random()*12)+"px"});const a=Math.random()*Math.PI*2,d=30+Math.random()*40;
+  anim(e,[{transform:"translate(-50%,-50%) scale(.3)",opacity:1},{transform:`translate(calc(-50% + ${Math.cos(a)*d}px),calc(-50% + ${Math.sin(a)*d}px)) scale(1)`,opacity:0}],{duration:900+Math.random()*400});}}
+const DEER=(h=40)=>`<svg class="deer" viewBox="0 0 62 50" style="height:${h}px"><g stroke="#c79a5b" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M41 10 l-4 -8 M39 6 l-5 -2 M46 10 l2 -8 M47 6 l5 -2"/></g><ellipse cx="25" cy="28" rx="16" ry="9" fill="#8a5a33"/><path d="M36 24 L42 12 L48 14 L42 28 Z" fill="#8a5a33"/><ellipse cx="45" cy="15" rx="7" ry="6" fill="#8a5a33"/><ellipse cx="51" cy="18" rx="6" ry="4" fill="#a87447"/><circle cx="57" cy="17" r="3" fill="#ff3b2f"/><circle cx="46" cy="13" r="1.3" fill="#222"/><path d="M40 10 l-5 -2 l4 5 z" fill="#6b4426"/><circle cx="9" cy="24" r="3.2" fill="#f5e6d0"/><g class="legs" stroke="#6b4426" stroke-width="3.2" stroke-linecap="round"><path d="M15 34 v13 M21 35 v12 M31 35 v12 M37 34 v13"/></g></svg>`;
+const SLEIGH=(h=46)=>`<span class="sleigh" style="height:${h}px"><span class="santa" style="font-size:${h*.62}px">🎅</span><svg viewBox="0 0 70 44" style="height:${h}px"><path d="M2 40 H58 q10 0 10 -9" stroke="#f6d34a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M14 36 v4 M48 36 v4" stroke="#f6d34a" stroke-width="3"/><path d="M8 14 H52 q10 0 10 12 v10 H14 q-8 0 -8 -10 z" fill="#c62828" stroke="#7a1212" stroke-width="2"/><path d="M10 22 H60" stroke="#f6d34a" stroke-width="2.5"/><rect x="40" y="4" width="12" height="11" fill="#22a55b" stroke="#145f34"/><rect x="45" y="4" width="2" height="11" fill="#f6d34a"/></svg></span>`;
+const SURPRISES={
+  sleigh(){const {rr}=raceBox();const e=sgfx(`<span class="hoho">¡Jo jo jo!</span>${SLEIGH(50)}${DEER(42)}${DEER(42)}`,{top:"4px",left:"0",display:"flex",alignItems:"flex-end",gap:"4px"});
+    const W=e.offsetWidth; anim(e,[{transform:`translate(${-W}px,0)`},{transform:`translate(${rr.width*.3}px,20px)`,offset:.33},{transform:`translate(${rr.width*.65}px,0)`,offset:.66},{transform:`translate(${rr.width+20}px,16px)`}],{duration:6500,easing:"linear"});
+    setTimeout(()=>{const k=randKart();if(!k)return;const {x,y}=kartPos(k);const g=sgfx("🎁",{left:x+"px",top:"-40px",fontSize:"30px"});
+      anim(g,[{transform:"translate(-50%,0)"},{transform:`translate(-50%,${y+30}px)`,offset:.8},{transform:`translate(-50%,${y+12}px)`,offset:.9},{transform:`translate(-50%,${y+30}px)`,opacity:0}],{duration:1300,easing:"ease-in"}).finished.then(()=>{kartFx(k,"hop");sparkle(x,y+40,["✨","⭐"]);kartSay(k,pick(["¡Un regalo!","¡Gracias Santa!","¿Y esto pa' mí?"]));}).catch(()=>{});},2600);},
+  snowball(){const k=randKart();if(!k)return;const {rr}=raceBox(),{x,y}=kartPos(k),fromL=Math.random()<.5,sx=fromL?-30:rr.width+30,sy=Math.random()*rr.height*.5;
+    const b=sgfx("",{left:sx+"px",top:sy+"px",width:"22px",height:"22px",borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#fff,#dfe9f5)",boxShadow:"0 2px 4px rgba(0,0,0,.35)"});
+    anim(b,[{transform:"translate(0,0)"},{transform:`translate(${(x-sx)/2}px,${(y+30-sy)/2-60}px)`,offset:.5},{transform:`translate(${x-sx}px,${y+30-sy}px)`}],{duration:900,easing:"linear"}).finished.then(()=>{sparkle(x,y+30,["❄","❄","•"],14);kartFx(k,"hit");kartSay(k,pick(["¡Epa!","¿Quién fue?","¡Me las vas a pagar!","¡Ay, chamo!"]));}).catch(()=>{});},
+  reindeer(){const ls=[...document.querySelectorAll(".lane")];if(!ls.length)return;const l=pick(ls),k=l.querySelector(".kart"),{rr}=raceBox(),lr=l.getBoundingClientRect();
+    const e=sgfx(DEER(46),{left:"0",top:(lr.top-rr.top+lr.height*.3)+"px"});
+    anim(e,[{transform:"translate(-80px,0)"},{transform:`translate(${rr.width*.25}px,-12px)`,offset:.25},{transform:`translate(${rr.width*.5}px,0)`,offset:.5},{transform:`translate(${rr.width*.75}px,-12px)`,offset:.75},{transform:`translate(${rr.width+20}px,0)`}],{duration:2600,easing:"linear"});
+    setTimeout(()=>{kartFx(k,"hop");kartSay(k,pick(["¡Cuidado!","¡Un reno!","¡Frena, frena!"]));},1100);},
+};
+function surprise(name){if(matchMedia("(prefers-reduced-motion: reduce)").matches||document.hidden||!raceStarted)return;(SURPRISES[name]||SURPRISES[pick(Object.keys(SURPRISES))])();}
+(function loopSurprise(){setTimeout(()=>{if(document.body.dataset.season==="navidad"&&Date.now()>quietUntil)surprise();loopSurprise();},70000+Math.random()*80000);})();
 let raceStarted=false;
 function renderRace(){
   const track=$("track"); const {tot}=counts(); const order=ranking();
@@ -344,13 +432,13 @@ function renderRace(){
   const max=Math.max(30,Math.ceil((lead+8)/10)*10);
   const meta=document.getElementById("meta"); if(meta)meta.textContent="Meta: "+max+" victorias";
   track.style.height=(order.length*laneH)+"px";
-  const experts=gameExperts();
+  const experts=gameExperts(), night=nightStats();
   const keep=new Set(); const topWins=tot[order[0].id], soloLead=order.length<2||tot[order[1].id]<topWins;
   order.forEach((p,i)=>{
     keep.add(p.id);
     let lane=track.querySelector(`.lane[data-p="${p.id}"]`);
     if(!lane){lane=document.createElement("div");lane.className="lane";lane.dataset.p=p.id;
-      lane.innerHTML=`<div class="lane-bg"></div><svg class="tree" viewBox="0 0 14 20" style="right:18px" aria-hidden="true"><path d="M7 0 L13 9 H10 L14 15 H0 L4 9 H1 Z" fill="#2fa35a"/><rect x="6" y="15" width="2" height="5" fill="#7a4a1f"/><circle cx="7" cy="1" r="1.5" fill="#ffd23a"/></svg><div class="finish"></div><div class="pos"></div><div class="road"><div class="kart" style="left:0px"><div class="body"><span class="smoke"></span><span class="smoke s2"></span><span class="fire"></span><div class="art"></div>${CROWN}<span class="name"></span><span class="wins"></span><span class="fx"></span><span class="say"></span><span class="badges"></span></div></div></div>`;
+      lane.innerHTML=`<div class="lane-bg"></div><svg class="tree" viewBox="0 0 14 20" style="right:18px" aria-hidden="true"><path d="M7 0 L13 9 H10 L14 15 H0 L4 9 H1 Z" fill="#2fa35a"/><rect x="6" y="15" width="2" height="5" fill="#7a4a1f"/><circle cx="7" cy="1" r="1.5" fill="#ffd23a"/></svg><div class="finish"></div><div class="pos"></div><div class="road"><div class="kart" style="left:0px"><div class="body"><span class="smoke"></span><span class="smoke s2"></span><span class="fire"></span><span class="cactus" title="Sequía: sin ganar esta noche">🌵</span><div class="art"></div>${CROWN}<span class="name"></span><span class="wins"></span><span class="fx"></span><span class="say"></span><span class="badges"></span></div></div></div>`;
       lane.style.top=(i*laneH)+"px";track.appendChild(lane);}
     lane.style.top=(i*laneH)+"px"; lane.dataset.rank=i+1; lane.dataset.lead=(i===0&&topWins>0&&soloLead)?"1":"0";
     lane.querySelector(".pos").textContent=(i+1)+"°";
@@ -360,6 +448,8 @@ function renderRace(){
     const ex=experts[p.id]||[], bx=lane.querySelector(".badges"), bsig=ex.map(g=>g.id).join(",");
     if(bx.dataset.s!==bsig){const old=new Set((bx.dataset.s||"").split(","));
       bx.innerHTML=ex.map(g=>`<span class="badge${old.has(g.id)?"":" new"}" title="Experto en ${esc(g.name)}">${gameIcon(g)}</span>`).join("");bx.dataset.s=bsig;}
+    const st=night.streak[p.id]||0; if(st>=2)lane.dataset.streak=st; else delete lane.dataset.streak;
+    if(night.drought.has(p.id))lane.dataset.drought="1"; else delete lane.dataset.drought;
     kart.setAttribute("aria-label",`${p.name}: ${w} victorias, puesto ${i+1}`+(ex.length?`, experto en ${ex.map(g=>g.name).join(", ")}`:""));
     kart.dataset.target=`calc(${w/max} * (100% - ${kartW}px))`;
     if(raceStarted)kart.style.left=kart.dataset.target;
@@ -613,6 +703,7 @@ function gameFX(gameId,sub,ids=[]){
 const joinNames=a=>a.length<2?(a[0]||""):a.slice(0,-1).join(", ")+" y "+a[a.length-1];
 /* ws: the new wins of one game (one or several players, one or several each) */
 function announce(ws){
+  quietUntil=Date.now()+15000;
   const g=gById(ws[0].game), gn=esc(g?.name||ws[0].game), {tot,per}=counts();
   const ids=[...new Set(ws.map(w=>w.player))].filter(pById), t=$("ticker"); if(!ids.length)return;
   if(ids.length===1){const p=pById(ids[0]),n=ws.length;
@@ -680,6 +771,7 @@ async function load(){
 }
 {const fxq=new URLSearchParams(location.search).get('fx');
  if(fxq==='todos'){const L=['catan','ticket','uno','rummy','monopoly','life','golf'];let i=0;const go=()=>{const g=gById(L[i%L.length]);gameFX(L[i%L.length],'Vista previa · '+(g?g.name:''),S.players.slice(0,1).map(p=>p.id));i++;};setTimeout(()=>{go();setInterval(go,5500);},1500);}
+ else if(fxq==='sorpresas'){const L=Object.keys(SURPRISES);let i=0;setInterval(()=>surprise(L[i++%L.length]),7000);}
  else if(fxq)setTimeout(()=>gameFX(fxq,'Vista previa'),1500);}
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(renderRace,150);});
 load(); setInterval(()=>{if(!document.hidden)load();},5000);
