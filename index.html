@@ -67,6 +67,13 @@ header.top{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-bet
 .kart .wins{position:absolute;right:-6px;top:-4px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:var(--lane-mark);color:#1d1a2e;font-family:var(--f-display);font-size:13px;display:grid;place-items:center;box-shadow:0 2px 0 rgba(0,0,0,.35)}
 .kart .crown{position:absolute;left:50%;bottom:100%;transform:translate(-50%,-2px);width:22px;display:none;animation:crown 1.2s ease-in-out infinite alternate}
 .lane[data-rank="1"][data-lead="1"] .kart .crown{display:block}
+.kart .badges{position:absolute;left:-20px;top:-10px;display:flex;flex-direction:column;gap:3px;z-index:3}
+.kart .badge{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:19px;line-height:1;background:#fff;border:2px solid var(--lane-mark);box-shadow:0 2px 0 rgba(0,0,0,.35);animation:shine 2.4s ease-in-out infinite}
+.kart .badge:nth-child(2){animation-delay:.4s}.kart .badge:nth-child(3){animation-delay:.8s}
+.kart .badge.new{animation:badgeIn .7s cubic-bezier(.3,1.6,.5,1) both,shine 2.4s ease-in-out .7s infinite}
+@keyframes shine{0%,80%,100%{box-shadow:0 2px 0 rgba(0,0,0,.35)}90%{box-shadow:0 2px 0 rgba(0,0,0,.35),0 0 10px 3px rgba(246,211,74,.8)}}
+@keyframes badgeIn{from{transform:scale(0) rotate(-180deg)}to{transform:scale(1) rotate(0)}}
+@media (max-width:560px){.kart .badge{width:26px;height:26px;font-size:15px}.kart .badges{left:-14px;top:-6px}}
 @keyframes crown{to{transform:translate(-50%,-5px) rotate(6deg)}}
 .kart .smoke{position:absolute;left:-10px;bottom:6px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35);animation:smoke .7s linear infinite}
 .kart .smoke.s2{animation-delay:.35s}
@@ -298,6 +305,17 @@ function ranking(){
   return S.players.slice().sort((a,b)=>(tot[b.id]-tot[a.id])||a.name.localeCompare(b.name));
 }
 
+/* Game expert: whoever alone has the most wins in a game gets that game's badge on their kart */
+const GAME_ICON={uno:"🃏",rummy:"🀄",ticket:"🚂",catan:"🐑",monopoly:"🎩",life:"🎡",golf:"⛳"};
+const gameIcon=g=>GAME_ICON[g.id]||"⭐";
+function gameExperts(){
+  const {per}=counts(), out={};
+  for(const g of S.games){
+    const rows=S.players.map(p=>[p.id,per[p.id]?.[g.id]||0]).sort((a,b)=>b[1]-a[1]);
+    if(rows[0]&&rows[0][1]>0&&(!rows[1]||rows[1][1]<rows[0][1]))(out[rows[0][0]]=out[rows[0][0]]||[]).push(g);
+  }
+  return out;
+}
 let raceStarted=false;
 function renderRace(){
   const track=$("track"); const {tot}=counts(); const order=ranking();
@@ -309,19 +327,23 @@ function renderRace(){
   const max=Math.max(30,Math.ceil((lead+8)/10)*10);
   const meta=document.getElementById("meta"); if(meta)meta.textContent="Meta: "+max+" victorias";
   track.style.height=(order.length*laneH)+"px";
+  const experts=gameExperts();
   const keep=new Set(); const topWins=tot[order[0].id], soloLead=order.length<2||tot[order[1].id]<topWins;
   order.forEach((p,i)=>{
     keep.add(p.id);
     let lane=track.querySelector(`.lane[data-p="${p.id}"]`);
     if(!lane){lane=document.createElement("div");lane.className="lane";lane.dataset.p=p.id;
-      lane.innerHTML=`<div class="lane-bg"></div><svg class="tree" viewBox="0 0 14 20" style="right:18px" aria-hidden="true"><path d="M7 0 L13 9 H10 L14 15 H0 L4 9 H1 Z" fill="#2fa35a"/><rect x="6" y="15" width="2" height="5" fill="#7a4a1f"/><circle cx="7" cy="1" r="1.5" fill="#ffd23a"/></svg><div class="finish"></div><div class="pos"></div><div class="road"><div class="kart" style="left:0px"><div class="body"><span class="smoke"></span><span class="smoke s2"></span><span class="fire"></span><div class="art"></div>${CROWN}<span class="name"></span><span class="wins"></span><span class="fx"></span><span class="say"></span></div></div></div>`;
+      lane.innerHTML=`<div class="lane-bg"></div><svg class="tree" viewBox="0 0 14 20" style="right:18px" aria-hidden="true"><path d="M7 0 L13 9 H10 L14 15 H0 L4 9 H1 Z" fill="#2fa35a"/><rect x="6" y="15" width="2" height="5" fill="#7a4a1f"/><circle cx="7" cy="1" r="1.5" fill="#ffd23a"/></svg><div class="finish"></div><div class="pos"></div><div class="road"><div class="kart" style="left:0px"><div class="body"><span class="smoke"></span><span class="smoke s2"></span><span class="fire"></span><div class="art"></div>${CROWN}<span class="name"></span><span class="wins"></span><span class="fx"></span><span class="say"></span><span class="badges"></span></div></div></div>`;
       lane.style.top=(i*laneH)+"px";track.appendChild(lane);}
     lane.style.top=(i*laneH)+"px"; lane.dataset.rank=i+1; lane.dataset.lead=(i===0&&topWins>0&&soloLead)?"1":"0";
     lane.querySelector(".pos").textContent=(i+1)+"°";
     const kart=lane.querySelector(".kart"), w=tot[p.id];
     const art=lane.querySelector(".art"); const sig=p.color+"|"+(p.photo||"")+"|"+(p.headScale||1)+"|"+p.hatTop+"|"+p.hatCx+"|"+p.eyeY;if(art.dataset.c!==sig){art.innerHTML=kartSVG(p.color,(p.name||"?")[0].toUpperCase(),p.photo,p.id,p.headScale,p.hatTop,p.hatCx,p.eyeY);art.dataset.c=sig;}
     lane.querySelector(".name").textContent=p.name; lane.querySelector(".wins").textContent=w;
-    kart.setAttribute("aria-label",`${p.name}: ${w} victorias, puesto ${i+1}`);
+    const ex=experts[p.id]||[], bx=lane.querySelector(".badges"), bsig=ex.map(g=>g.id).join(",");
+    if(bx.dataset.s!==bsig){const old=new Set((bx.dataset.s||"").split(","));
+      bx.innerHTML=ex.map(g=>`<span class="badge${old.has(g.id)?"":" new"}" title="Experto en ${esc(g.name)}">${gameIcon(g)}</span>`).join("");bx.dataset.s=bsig;}
+    kart.setAttribute("aria-label",`${p.name}: ${w} victorias, puesto ${i+1}`+(ex.length?`, experto en ${ex.map(g=>g.name).join(", ")}`:""));
     kart.dataset.target=`calc(${w/max} * (100% - ${kartW}px))`;
     if(raceStarted)kart.style.left=kart.dataset.target;
   });
@@ -404,7 +426,7 @@ function renderGames(){
     const total=rows.reduce((s,r)=>s+r.v,0), max=Math.max(1,...rows.map(r=>r.v));
     const leader=rows[0]&&rows[0].v>0&&(!rows[1]||rows[1].v<rows[0].v)?rows[0].p.name:null;
     return `<div class="card game"><h3>${esc(g.name)} <span class="num">${total} ${total===1?"partida":"partidas"}</span></h3>
-      <div class="note" style="margin:-6px 0 6px">${leader?`Manda ${esc(leader)}`:(total?"Empate arriba":"Nadie ha ganado aún")}</div>
+      <div class="note" style="margin:-6px 0 6px">${leader?`${gameIcon(g)} Experto: ${esc(leader)}`:(total?"Empate arriba":"Nadie ha ganado aún")}</div>
       ${rows.map(r=>`<div class="bar-row"><div><div class="bar-label"><span>${esc(r.p.name)}</span></div><div class="bar"><i style="width:${r.v/max*100}%;background:${r.p.color}"></i></div></div><span class="num">${r.v}</span></div>`).join("")||`<span class="note">Sin jugadores.</span>`}
     </div>`;
   }).join("");
