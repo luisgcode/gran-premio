@@ -191,6 +191,22 @@ td.best{font-weight:700;color:var(--good)}
 .history li:last-child{border-bottom:0}
 .stepper{display:flex;align-items:center;gap:14px}.stepper .chip{width:48px;height:48px;justify-content:center;font-size:24px;padding:0}.qty{font-family:var(--f-display);font-size:28px;min-width:2ch;text-align:center}
 #admin .chip{padding:10px 16px;font-size:15px}
+/* Game effects: full-screen overlay shown on every screen when a win is added */
+.fx-layer{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+.gfx{position:absolute;line-height:1;will-change:transform,opacity}
+.gfx-pop{left:50%;top:40%;text-align:center;font-family:var(--f-display);font-size:clamp(34px,9.5vw,120px);color:#fff;text-shadow:0 5px 0 #000,0 0 30px rgba(0,0,0,.55);white-space:nowrap;max-width:none}
+.gfx-pop small{display:inline-block;margin-top:10px;font:700 clamp(16px,3.6vw,30px) var(--f-body);background:rgba(0,0,0,.72);padding:6px 16px;border-radius:999px;text-shadow:none}
+.gfx-card{width:70px;height:104px;border-radius:10px;border:5px solid #fff;display:grid;place-items:center;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+.gfx-card b{display:grid;place-items:center;width:52px;height:72px;border-radius:50%;background:#fff;transform:rotate(-30deg);font:400 20px var(--f-display)}
+.gfx-tile{width:46px;height:62px;border-radius:7px;background:#fdf8ea;border:1px solid #c9bfa3;box-shadow:0 4px 0 #b9ad8e,0 8px 14px rgba(0,0,0,.35);display:grid;place-items:center;font:700 30px var(--f-body)}
+.gfx-wheel{width:min(60vw,300px);aspect-ratio:1;border-radius:50%;border:8px solid #fff;box-shadow:0 10px 30px rgba(0,0,0,.5);background:conic-gradient(#e8412f 0 36deg,#f2b81f 0 72deg,#22a55b 0 108deg,#2f7de8 0 144deg,#8e4ae0 0 180deg,#e8412f 0 216deg,#f2b81f 0 252deg,#22a55b 0 288deg,#2f7de8 0 324deg,#8e4ae0 0)}
+.gfx-train{display:flex;align-items:flex-end;gap:6px;top:56vh;left:0;--u:clamp(70px,13vw,150px)}
+.gfx-train .wagon{position:relative;width:var(--u);height:calc(var(--u)*.5);border-radius:8px 8px 4px 4px;border:3px solid rgba(0,0,0,.35);box-shadow:inset 0 -8px 0 rgba(0,0,0,.18)}
+.gfx-train .wagon::before,.gfx-train .wagon::after{content:"";position:absolute;bottom:calc(var(--u)*-.13);width:calc(var(--u)*.22);height:calc(var(--u)*.22);border-radius:50%;background:#222;border:3px solid #999;left:12%}
+.gfx-train .wagon::after{left:auto;right:12%}
+.gfx-train .wagon img{position:absolute;left:50%;bottom:62%;width:calc(var(--u)*.62);transform:translateX(-50%);filter:drop-shadow(0 2px 0 rgba(0,0,0,.4))}
+.gfx-train .loco{width:calc(var(--u)*1.5)}
+.gfx-ball{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#d9d9d9 70%,#aaa);box-shadow:0 3px 6px rgba(0,0,0,.4)}
 .confirm{display:inline-flex;gap:6px;align-items:center;font-size:13px}
 .setup{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .setup input{font:15px var(--f-body);padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0;flex:1 1 180px}
@@ -257,6 +273,7 @@ body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(
 
   </div>
 
+<div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
 <script>
 const COLORS=["#e8412f","#2f7de8","#22a55b","#f2b81f","#8e4ae0","#f07a1a","#1fb8c4","#e04a9a"];
 const DEFAULT_GAMES=[{id:"uno",name:"UNO"},{id:"rummy",name:"Rummy"},{id:"ticket",name:"Ticket to Ride"},{id:"catan",name:"Catan"},{id:"monopoly",name:"Monopoly"},{id:"life",name:"Life"},{id:"golf",name:"Golf (Netflix)"}];
@@ -539,6 +556,60 @@ if(ADMIN){
   });
 }
 
+/* ---------- Game effects ---------- */
+const R=Math.random, pick=a=>a[Math.floor(R()*a.length)];
+function gfx(html,cls,css){const e=document.createElement("div");e.className="gfx "+(cls||"");e.innerHTML=html;Object.assign(e.style,css||{});$("fxLayer").appendChild(e);return e;}
+function anim(e,frames,opts){const a=e.animate(frames,{fill:"both",...opts});a.onfinish=()=>e.remove();return a;}
+function rain(items,n,o={}){
+  for(let i=0;i<n;i++){const it=pick(items), e=typeof it==="function"?it():gfx(it,"",{fontSize:(28+R()*34)+"px"});
+    e.style.left=(R()*100)+"vw"; e.style.top="-120px";
+    anim(e,[{transform:`translateX(0) rotate(${(R()-.5)*60}deg)`},{transform:`translate(${(R()-.5)*120}px,calc(100vh + 240px)) rotate(${(R()-.5)*(o.spin||540)}deg)`}],
+      {duration:(o.dur||2600)*(.75+R()*.5),delay:R()*(o.spread||1400),easing:"cubic-bezier(.45,.05,.75,.95)"});}
+}
+function burst(make,n,cx,cy,dist=46){
+  for(let i=0;i<n;i++){const e=make(), a=R()*Math.PI*2, d=dist*(.5+R()*.7);
+    e.style.left=cx;e.style.top=cy;
+    anim(e,[{transform:"translate(-50%,-50%) scale(.2) rotate(0)",opacity:1},{transform:`translate(calc(-50% + ${Math.cos(a)*d}vmin),calc(-50% + ${Math.sin(a)*d}vmin)) scale(1) rotate(${(R()-.5)*720}deg)`,opacity:1,offset:.7},{transform:`translate(calc(-50% + ${Math.cos(a)*d*1.1}vmin),calc(-50% + ${Math.sin(a)*d*1.1+30}vmin)) scale(.9) rotate(${(R()-.5)*900}deg)`,opacity:0}],
+      {duration:1900+R()*700,delay:R()*250,easing:"cubic-bezier(.2,.8,.4,1)"});}
+}
+function popText(big,sub,delay=0){
+  const e=gfx(`${big}${sub?`<br><small>${esc(sub)}</small>`:""}`,"gfx-pop");
+  anim(e,[{transform:"translate(-50%,-50%) scale(0) rotate(-8deg)",opacity:0},{transform:"translate(-50%,-50%) scale(1.15) rotate(3deg)",opacity:1,offset:.12},{transform:"translate(-50%,-50%) scale(1) rotate(0)",opacity:1,offset:.2},{transform:"translate(-50%,-50%) scale(1)",opacity:1,offset:.85},{transform:"translate(-50%,-60%) scale(.9)",opacity:0}],{duration:3400,delay,easing:"ease-out"});
+}
+const UNO_C=["#e8412f","#f2b81f","#22a55b","#2f7de8"], UNO_V=["7","+2","⟲","⊘","4","9","+4"];
+const TILE_C=["#d22","#1d5fd6","#111","#e07a10"];
+const unoCard=()=>{const c=pick(UNO_C);return gfx(`<b style="color:${c}">${pick(UNO_V)}</b>`,"gfx-card",{background:c});};
+const tile=()=>gfx(String(1+Math.floor(R()*13)),"gfx-tile",{color:pick(TILE_C)});
+const GAME_FX={
+  catan(sub){rain(["🐑","🐑","🐑","🐑","🌾","🧱","🪵","🪨"],46,{spin:200});popText("¡Beeee! 🐑",sub,250);},
+  ticket(sub,ids){
+    const ps=[...S.players].sort((x,y)=>(ids.includes(y.id)?1:0)-(ids.includes(x.id)?1:0)).reverse();
+    const wag=ps.map(p=>`<div class="wagon" style="background:${p.color}">${p.photo?`<img src="${esc(p.photo)}" alt="">`:""}</div>`).join("");
+    const loco=`<svg class="loco" viewBox="0 0 160 112"><rect x="8" y="14" width="56" height="70" rx="6" fill="#b3261e" stroke="#5a120e" stroke-width="3"/><rect x="2" y="8" width="68" height="12" rx="4" fill="#2b2838"/><rect x="18" y="26" width="34" height="24" rx="4" fill="#ffe9a8" stroke="#5a120e" stroke-width="3"/><rect x="60" y="42" width="84" height="42" rx="10" fill="#e8412f" stroke="#5a120e" stroke-width="3"/><rect x="104" y="16" width="18" height="28" fill="#2b2838"/><rect x="98" y="10" width="30" height="10" rx="3" fill="#2b2838"/><circle cx="146" cy="54" r="7" fill="#ffd23a" stroke="#5a120e" stroke-width="2"/><path d="M144 84 L160 104 H130 Z" fill="#f6d34a" stroke="#5a120e" stroke-width="2"/><rect x="66" y="60" width="72" height="5" fill="#f6d34a"/><g fill="#222" stroke="#999" stroke-width="3"><circle cx="34" cy="90" r="17"/><circle cx="86" cy="94" r="13"/><circle cx="118" cy="94" r="13"/></g><rect x="30" y="88" width="92" height="5" rx="2" fill="#777"/></svg>`;
+    const t=gfx(wag+loco,"gfx-train");
+    anim(t,[{transform:"translateX(-100%)"},{transform:"translateX(100vw)"}],{duration:4200,easing:"linear"});
+    for(let i=0;i<16;i++){const c=gfx("☁️","",{fontSize:(26+R()*26)+"px",top:"48vh",left:(i*7)+"vw"});anim(c,[{transform:"translateY(0) scale(.4)",opacity:0},{transform:"translateY(-6vh) scale(1)",opacity:.9,offset:.3},{transform:"translateY(-22vh) scale(1.8)",opacity:0}],{duration:1600,delay:700+i*200});}
+    popText("¡Chu chuuu! 🚂",sub,150);},
+  uno(sub){burst(unoCard,22,"50vw","45vh",48);popText("¡UNO!",sub,100);},
+  rummy(sub){rain([tile],34,{spin:240,dur:2400});popText("¡Rummy!",sub,200);},
+  monopoly(sub){rain(["💵","💵","💵","💸","💰","🪙"],50,{spin:300});popText("🎩 ¡Cobra $200!",sub,200);},
+  life(sub){
+    const w=gfx("","gfx-wheel",{left:"50%",top:"46%"});
+    anim(w,[{transform:"translate(-50%,-50%) scale(0) rotate(0)"},{transform:"translate(-50%,-50%) scale(1) rotate(180deg)",offset:.12},{transform:`translate(-50%,-50%) scale(1) rotate(${1800+R()*360}deg)`,offset:.75},{transform:`translate(-50%,-50%) scale(0) rotate(${2000+R()*360}deg)`}],{duration:3000,easing:"cubic-bezier(.2,.7,.3,1)"});
+    setTimeout(()=>burst(()=>gfx(pick(["💍","👶","🏠","🎓","💼","🚗","💰"]),"",{fontSize:"44px"}),20,"50vw","46vh",46),2100);
+    popText("¡Así es la vida!",sub,2300);},
+  golf(sub){
+    const f=gfx("⛳","",{fontSize:"clamp(60px,10vw,110px)",left:"76vw",top:"58vh"});
+    anim(f,[{opacity:0},{opacity:1,offset:.08},{opacity:1,offset:.9},{opacity:0}],{duration:3800});
+    const b=gfx("","gfx-ball",{left:"10vw",top:"80vh"});
+    anim(b,[{transform:"translate(0,0) scale(1)"},{transform:"translate(20vw,-38vh) scale(1.4)",offset:.3},{transform:"translate(40vw,-50vh) scale(1.6)",offset:.5},{transform:"translate(58vw,-34vh) scale(1.3)",offset:.7},{transform:"translate(68vw,-11vh) scale(1)",offset:.86},{transform:"translate(69vw,-10vh) scale(0)"}],{duration:2200,easing:"ease-in-out"});
+    setTimeout(()=>burst(()=>gfx(pick(["⭐","✨","🌟"]),"",{fontSize:"34px"}),18,"80vw","66vh",30),2100);
+    popText("¡Hoyo en uno!",sub,2100);},
+};
+function gameFX(gameId,sub,ids=[]){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  (GAME_FX[gameId]||(s=>{rain(["⭐","🎉","🏆","✨"],40);popText("¡Victoria!",s,200);}))(sub,ids);
+}
 const joinNames=a=>a.length<2?(a[0]||""):a.slice(0,-1).join(", ")+" y "+a[a.length-1];
 /* ws: the new wins of one game (one or several players, one or several each) */
 function announce(ws){
@@ -548,6 +619,7 @@ function announce(ws){
     t.innerHTML=`🏁 <span><b>${esc(p.name)}</b> sumó ${n===1?"una victoria":n+" victorias"} en <b>${gn}</b>: ya lleva ${per[p.id]?.[ws[0].game]||0} en ese juego y ${tot[p.id]} en total.</span>`;}
   else t.innerHTML=`🏁 <span><b>${esc(joinNames(ids.map(id=>pById(id).name)))}</b> ganaron en <b>${gn}</b>.</span>`;
   t.classList.remove("flash");void t.offsetWidth;t.classList.add("flash");
+  gameFX(ws[0].game,`${joinNames(ids.map(id=>pById(id).name))} +${ids.length===1?ws.length:1} en ${g?.name||ws[0].game}`,ids);
   ids.forEach((id,i)=>{const k=document.querySelector(`.lane[data-p="${id}"] .kart`); if(!k)return;
     k.classList.remove("boost");void k.offsetWidth;k.classList.add("boost");setTimeout(()=>k.classList.remove("boost"),2200);
     setTimeout(()=>{const rr=document.querySelector(".race").getBoundingClientRect(),kr=k.getBoundingClientRect();confetti(kr.left-rr.left+kr.width/2,kr.top-rr.top);},900+i*250);});
@@ -606,6 +678,9 @@ async function load(){
   catch(e){$('status').textContent='Sin conexión, reintentando…';}
   finally{loading=false;}
 }
+{const fxq=new URLSearchParams(location.search).get('fx');
+ if(fxq==='todos'){const L=['catan','ticket','uno','rummy','monopoly','life','golf'];let i=0;const go=()=>{const g=gById(L[i%L.length]);gameFX(L[i%L.length],'Vista previa · '+(g?g.name:''),S.players.slice(0,1).map(p=>p.id));i++;};setTimeout(()=>{go();setInterval(go,5500);},1500);}
+ else if(fxq)setTimeout(()=>gameFX(fxq,'Vista previa'),1500);}
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(renderRace,150);});
 load(); setInterval(()=>{if(!document.hidden)load();},5000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
